@@ -4,7 +4,6 @@
   "version": "1.0",
   "description": "Add a custom starsarena link to Twitter profiles",
   "permissions": [
-    "scripting"
   ],
   "action": {
     "default_popup": "popup.html",
