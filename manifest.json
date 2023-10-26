@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Starsarena on X",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Add a custom starsarena link to Twitter profiles",
   "permissions": [
   ],
@@ -34,6 +34,14 @@
       ],
       "resources": [
         "icon.png",
+        "tip.png",
+        "fees_earned.webp",
+        "follower_count.png",
+        "following_count.webp",
+        "holder_count.png",
+        "portfolio.png",
+        "sells.webp",
+        "buys.webp",
         "injectedScript.js"
       ]
     }

@@ -19,15 +19,14 @@ async function getPricesFromContract(userAddress) {
     }
 }
 
-async function fetchUserAddress(username) {
+async function fetchUserData(username) {
     let url = `https://starsarena-extension-be.vercel.app/api/${username}`;
     try {
         let response = await fetch(url);
         if (!response.ok) {
             return null;
         }
-        let data = await response.json();
-        return data.address;
+        return await response.json();
     } catch (error) {
         console.error('Fetch error: ', error);
         return null;
@@ -41,8 +40,7 @@ function waitForElement(selector, callback) {
         for (const mutation of mutationsList) {
             if (mutation.type === 'childList' && mutation.addedNodes.length) {
                 mutation.addedNodes.forEach(node => {
-                    // Check the children of the node to find the element
-                    if (node instanceof HTMLElement) { // ensures that the node is an element
+                    if (node instanceof HTMLElement) {
                         const foundElement = node.querySelector(selector);
                         if (foundElement) {
                             callback(foundElement);
@@ -57,14 +55,10 @@ function waitForElement(selector, callback) {
     observer.observe(document.body, config);
 }
 
-async function addProfileLink(userNameElement) {
-    if (userNameElement.querySelector('.custom-profile-link')) {
-        return;
-    }
-
-    let username = window.location.pathname.split('/')[1];
-    if (!username || username === 'home') return;
+function addBuySellButtons(username, prices, userNameElement, buttonStyle) {
     let profileLink = `https://starsarena.com/${username}`;
+    let sellPriceConverted = parseFloat(ethers.utils.formatUnits(prices.sellPriceAfterFee, 18)).toFixed(2);
+    let buyPriceConverted = parseFloat(ethers.utils.formatUnits(prices.buyPriceAfterFee, 18)).toFixed(2);
 
     let link = document.createElement('a');
     link.setAttribute('href', profileLink);
@@ -74,26 +68,25 @@ async function addProfileLink(userNameElement) {
 
     let icon = document.createElement('img');
     icon.setAttribute('src', chrome.runtime.getURL('icon.png'));
-    icon.setAttribute('style', 'height: 32px; width: 32px; margin-left: 5px;');
+    icon.setAttribute('style', 'height: 28px; width: 28px; margin-left: 5px;');
 
     link.appendChild(icon);
-    userNameElement.appendChild(link);
-
-    let address = await fetchUserAddress(username);
-    if (!address) {
-        return;
-    }
-    let prices = await getPricesFromContract(address);
-    if (!prices) {
-        return;
-    }
-
-    let sellPriceConverted = parseFloat(ethers.utils.formatUnits(prices.sellPriceAfterFee, 18)).toFixed(2);
-    let buyPriceConverted = parseFloat(ethers.utils.formatUnits(prices.buyPriceAfterFee, 18)).toFixed(2);
 
     let buyButton = document.createElement('button');
-    buyButton.textContent = `Buy (${buyPriceConverted})`;
-    buyButton.setAttribute('style', 'color: white; background-color: green; margin-left: 5px; font-size: 18px; cursor: pointer;');
+    buyButton.textContent = `${buyPriceConverted}`;
+    buyButton.style.cssText = buttonStyle;
+    buyButton.style.color = '#FFFFFF';
+    buyButton.style.backgroundColor = '#28a745';
+    buyButton.style.borderColor = '#28a745';
+    buyButton.onmouseenter = function () {
+        this.style.backgroundColor = '#218838';
+        this.style.borderColor = '#218838';
+    };
+    buyButton.onmouseleave = function () {
+        this.style.backgroundColor = '#28a745';
+        this.style.borderColor = '#28a745';
+    };
+
     buyButton.onclick = function () {
         window.postMessage({
             type: "BUY_SHARES",
@@ -103,8 +96,20 @@ async function addProfileLink(userNameElement) {
     };
 
     let sellButton = document.createElement('button');
-    sellButton.textContent = `Sell (${sellPriceConverted})`;
-    sellButton.setAttribute('style', 'color: white; background-color: red; margin-left: 5px; font-size: 18px; cursor: pointer;');
+    sellButton.textContent = `${sellPriceConverted}`;
+    sellButton.style.cssText = buttonStyle;
+    sellButton.style.color = '#FFFFFF';
+    sellButton.style.backgroundColor = '#FF4136';
+    sellButton.style.borderColor = '#FF4136';
+    sellButton.onmouseenter = function () {
+        this.style.backgroundColor = '#c2302e';
+        this.style.borderColor = '#c2302e';
+    };
+    sellButton.onmouseleave = function () {
+        this.style.backgroundColor = '#FF4136';
+        this.style.borderColor = '#FF4136';
+    };
+
     sellButton.onclick = function () {
         window.postMessage({
             type: "SELL_SHARES",
@@ -112,30 +117,174 @@ async function addProfileLink(userNameElement) {
         }, "*");
     };
 
+    userNameElement.appendChild(link);
     userNameElement.appendChild(sellButton);
     userNameElement.appendChild(buyButton);
 }
 
-function addTimelineLink(userNameElement) {
+function addTipButton(userData, userNameElement, buttonStyle) {
+    if (!userData || !userData.lastThreadId) return;
+
+    let tipButton = document.createElement('button');
+    tipButton.style.cssText = buttonStyle + `
+        background-color: transparent; 
+        border: 0px`;
+
+    let tipIcon = document.createElement('img');
+    tipIcon.setAttribute('src', chrome.runtime.getURL('tip.png'));
+    tipIcon.setAttribute('style', 'width: 32px;');
+    tipButton.prepend(tipIcon);
+
+    let tipInput = document.createElement('input');
+    tipInput.setAttribute('type', 'text');
+    tipInput.setAttribute('placeholder', '0.5 (AVAX TIP)');
+    tipInput.style.cssText = `
+        margin-left: 5px;
+        padding: 0.5em;
+        font-size: 16px;
+        border: 1px solid #ccc;
+        border-radius: 4px;`;
+
+    tipButton.onclick = function () {
+        let tipAmount = tipInput.value;
+        if (tipAmount) {
+            window.postMessage({
+                type: "SEND_TIP",
+                userAddress: userData.address,
+                tip: tipAmount,
+            }, "*");
+        }
+    };
+
+    userNameElement.appendChild(tipButton);
+    userNameElement.appendChild(tipInput);
+}
+
+async function addProfileLink(userNameElement) {
+    if (userNameElement.querySelector('.custom-profile-link')) {
+        return;
+    }
+
+    let username = window.location.pathname.split('/')[1];
+    if (!username || username === 'home') return;
+
+    let userData = await fetchUserData(username);
+    if (!userData || !userData.address) {
+        return;
+    }
+    let prices = await getPricesFromContract(userData.address);
+    if (!prices) {
+        return;
+    }
+
+    const buttonStyle = `
+    display: inline-block;
+    padding: 0.5em 1em;  // Increased padding for larger button size
+    font-size: 16px;     // Slightly larger font size for readability
+    border: none;
+    border-radius: 4px;  // Rounded corners for a modern look
+    transition: all 0.3s ease 0s;
+    font-weight: bold;
+    margin-left: 5px;
+    margin-right: 5px;
+    cursor: pointer;
+`;
+
+    addBuySellButtons(username, prices, userNameElement, buttonStyle);
+    //addTipButton(userData, userNameElement, buttonStyle);
+
+    let userDescriptionElement = document.querySelector('div[data-testid="UserDescription"]');
+    if (userDescriptionElement) {
+        addUserDescriptionIcons(userDescriptionElement, userData);
+    }
+}
+
+const ongoingRequests = {};
+
+async function addTimelineLink(userNameElement) {
     if (userNameElement.querySelector('.custom-profile-link')) return;
 
     const userNameSpan = userNameElement.querySelector('a');
     if (!userNameSpan) return;
 
     const usernameText = userNameSpan.href.split('/')[3];
-    const profileLink = `https://starsarena.com/${usernameText}`;
 
-    let link = document.createElement('a');
-    link.setAttribute('href', profileLink);
-    link.setAttribute('target', '_blank');
-    link.className = 'custom-profile-link';
+    if (ongoingRequests[usernameText]) {
+        return;
+    }
+    ongoingRequests[usernameText] = true;
 
-    let icon = document.createElement('img');
-    icon.setAttribute('src', chrome.runtime.getURL('icon.png'));
-    icon.setAttribute('style', 'height: 20px; width: 20px; margin-left: 5px;');
-    link.appendChild(icon);
+    try {
+        const userData = await fetchUserData(usernameText);
+        if (userData && userData.address) {
+            const profileLink = `https://starsarena.com/${usernameText}`;
 
-    userNameElement.querySelector('.css-1dbjc4n.r-1d09ksm.r-18u37iz.r-1wbh5a2').appendChild(link);
+            if (!userNameElement.querySelector('.custom-profile-link')) {
+                let link = document.createElement('a');
+                link.setAttribute('href', profileLink);
+                link.setAttribute('target', '_blank');
+                link.className = 'custom-profile-link';
+
+                let icon = document.createElement('img');
+                icon.setAttribute('src', chrome.runtime.getURL('icon.png'));
+                icon.setAttribute('style', 'height: 16px; width: 16px; margin-left: 10px;');
+                link.appendChild(icon);
+
+                userNameElement.querySelector('.css-1dbjc4n.r-1d09ksm.r-18u37iz.r-1wbh5a2').appendChild(link);
+            }
+        }
+    } catch (error) {
+        console.error('Error fetching user data:', error);
+    } finally {
+        delete ongoingRequests[usernameText];
+    }
+}
+
+function addIcon(data, image, tooltipText, iconsContainer) {
+    let iconTextContainer = document.createElement('div');
+    iconTextContainer.style.display = 'flex';
+    iconTextContainer.style.alignItems = 'center';
+
+    let iconElement = document.createElement('img');
+    iconElement.src = chrome.runtime.getURL(image);
+    iconElement.style.width = '15px';
+    iconElement.style.height = 'auto';
+    iconElement.title = tooltipText;
+
+    let textElement = document.createElement('span');
+    textElement.textContent = data;
+    textElement.style.fontSize = '15px';
+    textElement.style.marginLeft = '2px';
+    textElement.title = tooltipText;
+
+    iconTextContainer.appendChild(iconElement);
+    iconTextContainer.appendChild(textElement);
+
+    iconsContainer.appendChild(iconTextContainer);
+}
+
+function addUserDescriptionIcons(userDescriptionElement, userData) {
+    let iconsContainer = document.createElement('div');
+    iconsContainer.style.display = 'inline-flex';
+    iconsContainer.style.flexWrap = 'nowrap';
+    iconsContainer.style.alignItems = 'center';
+    iconsContainer.style.justifyContent = 'flex-start';
+    iconsContainer.style.gap = '12px';
+    iconsContainer.style.marginBottom = '10px';
+    iconsContainer.style.border = '2px dotted gray';
+    iconsContainer.style.borderRadius = '6px';
+    iconsContainer.style.padding = '2px';
+    iconsContainer.style.boxSizing = 'border-box';
+
+    addIcon(userData.followerCount, 'follower_count.png', 'Followers', iconsContainer);
+    addIcon(userData.followingsCount, 'following_count.webp', 'Following', iconsContainer);
+    addIcon(parseFloat(ethers.utils.formatUnits(userData.portfolio, 18)).toFixed(2), 'portfolio.png', 'Portfolio', iconsContainer);
+    addIcon(userData.holders, 'holder_count.png', 'Holders', iconsContainer);
+    addIcon(parseFloat(ethers.utils.formatUnits(userData.feesEarned, 18)).toFixed(2), 'fees_earned.webp', 'Fees Earned', iconsContainer);
+    addIcon(userData.buys, 'buys.webp', 'Buys', iconsContainer);
+    addIcon(userData.sells, 'sells.webp', 'Sells', iconsContainer);
+
+    userDescriptionElement.parentNode.insertBefore(iconsContainer, userDescriptionElement);
 }
 
 function injectScript() {
