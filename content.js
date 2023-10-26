@@ -55,7 +55,7 @@ function waitForElement(selector, callback) {
     observer.observe(document.body, config);
 }
 
-function addBuySellButtons(username, prices, userNameElement, buttonStyle) {
+function addBuySellButtons(username, prices, userData, userNameElement, buttonStyle) {
     let profileLink = `https://starsarena.com/${username}`;
     let sellPriceConverted = parseFloat(ethers.utils.formatUnits(prices.sellPriceAfterFee, 18)).toFixed(2);
     let buyPriceConverted = parseFloat(ethers.utils.formatUnits(prices.buyPriceAfterFee, 18)).toFixed(2);
@@ -90,7 +90,7 @@ function addBuySellButtons(username, prices, userNameElement, buttonStyle) {
     buyButton.onclick = function () {
         window.postMessage({
             type: "BUY_SHARES",
-            userAddress: address,
+            userAddress: userData.address,
             price: prices.buyPriceAfterFee,
         }, "*");
     };
@@ -113,7 +113,7 @@ function addBuySellButtons(username, prices, userNameElement, buttonStyle) {
     sellButton.onclick = function () {
         window.postMessage({
             type: "SELL_SHARES",
-            userAddress: address
+            userAddress: userData.address
         }, "*");
     };
 
@@ -190,7 +190,7 @@ async function addProfileLink(userNameElement) {
     cursor: pointer;
 `;
 
-    addBuySellButtons(username, prices, userNameElement, buttonStyle);
+    addBuySellButtons(username, prices, userData, userNameElement, buttonStyle);
     //addTipButton(userData, userNameElement, buttonStyle);
 
     let userDescriptionElement = document.querySelector('div[data-testid="UserDescription"]');
